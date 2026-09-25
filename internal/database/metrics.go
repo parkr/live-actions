@@ -22,6 +22,7 @@ func (d *DBWrapper) InsertMetricsSnapshot(ctx context.Context, running, queued i
 // taken every couple of seconds (see MetricsUpdateService), so an unbounded
 // query over a day+ window returns tens of thousands of rows - far more than
 // a chart can usefully render and expensive to marshal/transfer/draw.
+// 288 = 24h / 5min, the standard dashboard resolution for a 1-day graph.
 const targetHistoryPoints = 288
 
 // GetMetricsHistory returns time-series data within the given duration,
