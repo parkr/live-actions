@@ -35,7 +35,7 @@ const STATUS_OPTIONS = [
 export default function App() {
   const [activePage, setActivePage] = useState<Page>('dashboard')
   const [sidebarOpen, setSidebarOpen] = useState(false)
-  const [period, setPeriod] = useState<Period>('day')
+  const [period, setPeriod] = useState<Period>('hour')
   const [metricsData, setMetricsData] = useState<MetricsResponse | null>(null)
   const [ready, setReady] = useState(false)
   const [selectedRepo, setSelectedRepo] = useState('')

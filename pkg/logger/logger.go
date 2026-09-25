@@ -2,6 +2,7 @@ package logger
 
 import (
 	"os"
+	"sync"
 	"time"
 
 	"go.uber.org/zap"
@@ -10,6 +11,8 @@ import (
 
 var Logger *zap.Logger
 
+var initOnce sync.Once
+
 var logLevels = map[string]zapcore.Level{
 	"debug": zapcore.DebugLevel,
 	"info":  zapcore.InfoLevel,
@@ -17,7 +20,18 @@ var logLevels = map[string]zapcore.Level{
 	"error": zapcore.ErrorLevel,
 }
 
+// InitLogger builds Logger from the given level on its first call; later
+// calls are no-ops. Production code calls this exactly once at startup, but
+// many test packages independently call InitLogger("error") in their own
+// setup before touching Logger - without the guard, those concurrent calls
+// race on the Logger assignment (and reinitializing per call was wasted
+// work), which surfaces as soon as any of those tests run under -race with
+// t.Parallel().
 func InitLogger(level string) {
+	initOnce.Do(func() { initLogger(level) })
+}
+
+func initLogger(level string) {
 	config := zapcore.EncoderConfig{
 		TimeKey:        "time",
 		LevelKey:       "level",

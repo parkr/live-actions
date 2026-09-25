@@ -17,14 +17,35 @@ func (d *DBWrapper) InsertMetricsSnapshot(ctx context.Context, running, queued i
 	return err
 }
 
-// GetMetricsHistory returns time-series snapshots within the given duration.
+// targetHistoryPoints caps how many points GetMetricsHistory returns for any
+// period, regardless of how many raw snapshots were collected. Snapshots are
+// taken every couple of seconds (see MetricsUpdateService), so an unbounded
+// query over a day+ window returns tens of thousands of rows - far more than
+// a chart can usefully render and expensive to marshal/transfer/draw.
+// 288 = 24h / 5min, the standard dashboard resolution for a 1-day graph.
+const targetHistoryPoints = 288
+
+// GetMetricsHistory returns time-series data within the given duration,
+// downsampled in SQL to roughly targetHistoryPoints buckets so the response
+// stays small and cheap to render no matter how wide the window is.
 func (d *DBWrapper) GetMetricsHistory(ctx context.Context, since time.Duration) ([]models.MetricsSnapshot, error) {
 	cutoff := time.Now().UTC().Add(-since).Format("2006-01-02 15:04:05")
+
+	bucketSeconds := int64(since.Seconds()) / targetHistoryPoints
+	if bucketSeconds < 1 {
+		bucketSeconds = 1
+	}
+
 	rows, err := d.readDB.QueryContext(ctx,
-		`SELECT timestamp, running_jobs, queued_jobs
+		`SELECT
+			(CAST(strftime('%s', timestamp) AS INTEGER) / ?) * ? AS bucket_ts,
+			CAST(ROUND(AVG(running_jobs)) AS INTEGER),
+			CAST(ROUND(AVG(queued_jobs)) AS INTEGER)
 		 FROM metrics_snapshots
 		 WHERE timestamp >= ?
-		 ORDER BY timestamp ASC`, cutoff,
+		 GROUP BY bucket_ts
+		 ORDER BY bucket_ts ASC`,
+		bucketSeconds, bucketSeconds, cutoff,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query metrics history: %w", err)
@@ -34,15 +55,9 @@ func (d *DBWrapper) GetMetricsHistory(ctx context.Context, since time.Duration) 
 	var snapshots []models.MetricsSnapshot
 	for rows.Next() {
 		var s models.MetricsSnapshot
-		var ts string
-		if err := rows.Scan(&ts, &s.Running, &s.Queued); err != nil {
+		if err := rows.Scan(&s.Timestamp, &s.Running, &s.Queued); err != nil {
 			return nil, fmt.Errorf("failed to scan metrics snapshot: %w", err)
 		}
-		t, _ := time.Parse("2006-01-02 15:04:05", ts)
-		if t.IsZero() {
-			t, _ = time.Parse(time.RFC3339, ts)
-		}
-		s.Timestamp = t.Unix()
 		snapshots = append(snapshots, s)
 	}
 	return snapshots, rows.Err()
