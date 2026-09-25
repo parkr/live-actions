@@ -122,6 +122,7 @@ export function DemandChart({ data, period, onPeriodChange }: Props) {
                 strokeWidth={2}
                 fill="url(#gradRunning)"
                 dot={false}
+                isAnimationActive={false}
               />
               <Area
                 type="monotone"
@@ -131,6 +132,7 @@ export function DemandChart({ data, period, onPeriodChange }: Props) {
                 strokeWidth={2}
                 fill="url(#gradQueued)"
                 dot={false}
+                isAnimationActive={false}
               />
             </AreaChart>
           </ResponsiveContainer>
